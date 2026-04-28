@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -67,8 +69,9 @@ export default function DashboardPage() {
   };
 
   const handleDeletePrompt = async (id: string) => {
+    if (!user) return;
     try {
-      await deletePrompt(id);
+      await deletePrompt(id, user.uid);
       setPrompts((prev) => prev.filter((p) => p.id !== id));
     } catch (error) {
       console.error('Error deleting prompt:', error);

@@ -1,9 +1,12 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle } from '@/lib/auth';
+import { upsertUser } from '@/lib/firestore';
 
 export default function LoginPage() {
   const { user, loading } = useAuth();
@@ -17,7 +20,19 @@ export default function LoginPage() {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle();
+      const firebaseUser = await signInWithGoogle();
+
+      // Atomic upsert — safe against simultaneous sign-ins from multiple devices.
+      // `merge: true` ensures existing fields (e.g. role, tier) are never overwritten.
+      await upsertUser({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email ?? '',
+        displayName: firebaseUser.displayName ?? '',
+        photoURL: firebaseUser.photoURL ?? '',
+        role: 'user',
+        tier: 'free',
+      });
+
       router.push('/dashboard');
     } catch (error) {
       console.error('Sign in error:', error);

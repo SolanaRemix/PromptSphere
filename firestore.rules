@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: returns true when the caller is the designated admin.
+    //
+    // NOTE: The email check below matches the default NEXT_PUBLIC_ADMIN_EMAIL
+    // value used by the application. For a production deployment, prefer
+    // granting admin privileges via a Firebase custom claim set server-side
+    // (e.g. `admin.auth().setCustomUserClaims(uid, { admin: true })`) and
+    // replace this function body with:
+    //   return request.auth.token.admin == true;
+    // That approach does not require redeploying these rules when the admin
+    // account changes.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "gxqstudio@gmail.com";
+    }
+
+    // Users collection
+    match /users/{uid} {
+      // Any authenticated user may read and write their own document
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      // Admin may list all users
+      allow list: if isAdmin();
+    }
+
+    // Prompts collection
+    match /prompts/{promptId} {
+      // Any authenticated user may read or create prompts
+      allow read, create: if request.auth != null;
+      // Only the owner may update or delete their own prompt
+      allow update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // Roles collection – read-only for authenticated users, write requires admin
+    match /roles/{roleId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Activity logs – write-only for authenticated users; read restricted to admin
+    match /activityLogs/{logId} {
+      allow create: if request.auth != null;
+      allow read, list: if isAdmin();
+    }
+  }
+}
