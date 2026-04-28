@@ -1,6 +1,6 @@
 # PromptSphere — AI Prompt Marketplace
 
-A professional tool where you can generate, organize, and share optimized AI prompts. Built with Next.js 14, Firebase, and Tailwind CSS.
+A professional tool where you can generate, organize, and share optimized AI prompts. Built with Next.js 15, Firebase, and Tailwind CSS.
 
 ## Features
 
@@ -47,7 +47,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID=...
 
 ## Tech Stack
 
-- [Next.js 14](https://nextjs.org) (App Router)
+- [Next.js 15](https://nextjs.org) (App Router)
 - [Firebase](https://firebase.google.com) (Auth + Firestore)
 - [Tailwind CSS](https://tailwindcss.com)
 - TypeScript
