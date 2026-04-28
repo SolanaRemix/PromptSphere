@@ -7,7 +7,7 @@ import { getAllUsers, getRoles, getActivityLogs } from '@/lib/firestore';
 import UserTable from '@/components/UserTable';
 import { User, Role, ActivityLog } from '@/types';
 import Link from 'next/link';
-import { signOut } from '@/lib/auth';
+import { signOut, ADMIN_EMAIL } from '@/lib/auth';
 
 export default function AdminPage() {
   const { user, loading, isAdmin } = useAuth();
@@ -276,7 +276,7 @@ export default function AdminPage() {
                     </div>
                     <div className="flex justify-between">
                       <dt className="text-gray-400">Admin Email</dt>
-                      <dd className="text-brand-purple font-medium">gxqstudio@gmail.com</dd>
+                      <dd className="text-brand-purple font-medium">{ADMIN_EMAIL}</dd>
                     </div>
                     <div className="flex justify-between">
                       <dt className="text-gray-400">App Version</dt>
