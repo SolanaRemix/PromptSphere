@@ -2,24 +2,26 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserPrompts, createPrompt, deletePrompt } from '@/lib/firestore';
+import { getUserPrompts, createPrompt, updatePrompt, deletePrompt } from '@/lib/firestore';
 import PromptCard from '@/components/PromptCard';
+import PromptEditor from '@/components/PromptEditor';
 import { Prompt } from '@/types';
 import Link from 'next/link';
 import { signOut } from '@/lib/auth';
+import { extractParameters } from '@/lib/aiSuggestions';
 
 export default function DashboardPage() {
   const { user, loading, isAdmin } = useAuth();
   const router = useRouter();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newPrompt, setNewPrompt] = useState({ title: '', content: '', tags: '' });
-  const [creating, setCreating] = useState(false);
   const [activeSection, setActiveSection] = useState<'prompts' | 'profile'>('prompts');
+
+  /** null = create mode; a Prompt object = edit mode; undefined = hidden */
+  const [editorPrompt, setEditorPrompt] = useState<Prompt | null | undefined>(undefined);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -27,14 +29,7 @@ export default function DashboardPage() {
     }
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (user) {
-      loadPrompts();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const loadPrompts = async () => {
+  const loadPrompts = useCallback(async () => {
     if (!user) return;
     setLoadingPrompts(true);
     try {
@@ -45,28 +40,41 @@ export default function DashboardPage() {
     } finally {
       setLoadingPrompts(false);
     }
-  };
+  }, [user]);
 
-  const handleCreatePrompt = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setCreating(true);
-    try {
-      await createPrompt({
-        userId: user.uid,
-        title: newPrompt.title,
-        content: newPrompt.content,
-        tags: newPrompt.tags.split(',').map((t) => t.trim()).filter(Boolean),
-      });
-      setNewPrompt({ title: '', content: '', tags: '' });
-      setShowCreateForm(false);
-      await loadPrompts();
-    } catch (error) {
-      console.error('Error creating prompt:', error);
-    } finally {
-      setCreating(false);
+  useEffect(() => {
+    if (user) {
+      loadPrompts();
     }
-  };
+  }, [user, loadPrompts]);
+
+  const handleSavePrompt = useCallback(
+    async (data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
+      if (!user) return;
+
+      if (editorPrompt && editorPrompt.id) {
+        // Editing an existing prompt
+        await updatePrompt(editorPrompt.id, {
+          title: data.title,
+          content: data.content,
+          tags: data.tags,
+          parameters: extractParameters(data.content),
+          visibility: data.visibility,
+          price: data.price,
+          version: data.version,
+        });
+      } else {
+        // Creating a new prompt
+        await createPrompt({
+          ...data,
+          parameters: extractParameters(data.content),
+        });
+      }
+      setEditorPrompt(undefined);
+      await loadPrompts();
+    },
+    [user, editorPrompt, loadPrompts]
+  );
 
   const handleDeletePrompt = async (id: string) => {
     if (!user) return;
@@ -188,66 +196,25 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-8">
               <h1 className="text-3xl font-bold text-white">My Prompts</h1>
               <button
-                onClick={() => setShowCreateForm(!showCreateForm)}
+                onClick={() => setEditorPrompt(null)}
                 className="btn-gradient px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity"
               >
                 + New Prompt
               </button>
             </div>
 
-            {showCreateForm && (
-              <div className="glass-card rounded-2xl p-6 mb-8">
-                <h2 className="text-xl font-semibold text-white mb-4">Create New Prompt</h2>
-                <form onSubmit={handleCreatePrompt} className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Title</label>
-                    <input
-                      type="text"
-                      value={newPrompt.title}
-                      onChange={(e) => setNewPrompt({ ...newPrompt, title: e.target.value })}
-                      className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-3 text-white focus:border-brand-purple/50 focus:outline-none transition-colors"
-                      placeholder="Prompt title..."
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Content</label>
-                    <textarea
-                      value={newPrompt.content}
-                      onChange={(e) => setNewPrompt({ ...newPrompt, content: e.target.value })}
-                      className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-3 text-white focus:border-brand-purple/50 focus:outline-none transition-colors resize-none"
-                      placeholder="Your prompt content..."
-                      rows={4}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Tags (comma-separated)</label>
-                    <input
-                      type="text"
-                      value={newPrompt.tags}
-                      onChange={(e) => setNewPrompt({ ...newPrompt, tags: e.target.value })}
-                      className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-3 text-white focus:border-brand-purple/50 focus:outline-none transition-colors"
-                      placeholder="ai, writing, creative..."
-                    />
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="submit"
-                      disabled={creating}
-                      className="btn-gradient px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-                    >
-                      {creating ? 'Creating...' : 'Create Prompt'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateForm(false)}
-                      className="px-6 py-3 rounded-xl font-semibold bg-dark-700 text-gray-400 hover:text-white transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+            {/* Inline editor (create or edit) */}
+            {editorPrompt !== undefined && (
+              <div className="mb-8">
+                <PromptEditor
+                  prompt={editorPrompt ?? undefined}
+                  userId={user.uid}
+                  displayName={user.displayName ?? 'Anonymous'}
+                  photoURL={user.photoURL ?? ''}
+                  onSave={handleSavePrompt}
+                  onCancel={() => setEditorPrompt(undefined)}
+                  existingPrompts={prompts}
+                />
               </div>
             )}
 
@@ -263,7 +230,12 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {prompts.map((prompt) => (
-                  <PromptCard key={prompt.id} prompt={prompt} onDelete={handleDeletePrompt} />
+                  <PromptCard
+                    key={prompt.id}
+                    prompt={prompt}
+                    onDelete={handleDeletePrompt}
+                    onEdit={(p) => setEditorPrompt(p)}
+                  />
                 ))}
               </div>
             )}

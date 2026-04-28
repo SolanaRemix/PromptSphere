@@ -5,15 +5,19 @@ import {
   getDocs,
   setDoc,
   addDoc,
+  updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
   serverTimestamp,
   Timestamp,
+  onSnapshot,
+  limit,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Prompt, Role, ActivityLog } from '@/types';
+import type { User, Prompt, PromptVersion, CollaboratorPresence, Role, ActivityLog } from '@/types';
 
 // Users
 export async function createUser(userData: Omit<User, 'createdAt'>) {
@@ -83,10 +87,46 @@ export async function getAllUsers(): Promise<User[]> {
 export async function createPrompt(promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) {
   const ref = await addDoc(collection(db, 'prompts'), {
     ...promptData,
+    parameters: promptData.parameters ?? [],
+    visibility: promptData.visibility ?? 'private',
+    price: promptData.price ?? 0,
+    version: promptData.version ?? 1,
+    collaborators: promptData.collaborators ?? [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+export async function getPromptById(promptId: string): Promise<Prompt | null> {
+  const snap = await getDoc(doc(db, 'prompts', promptId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    id: snap.id,
+    ...data,
+    parameters: data.parameters ?? [],
+    visibility: data.visibility ?? 'private',
+    price: data.price ?? 0,
+    version: data.version ?? 1,
+    collaborators: data.collaborators ?? [],
+    createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
+    updatedAt: (data.updatedAt as Timestamp)?.toDate() ?? new Date(),
+  } as Prompt;
+}
+
+/**
+ * Updates a prompt document. Only the owner may update their own prompt
+ * (enforced by Firestore security rules).
+ */
+export async function updatePrompt(
+  promptId: string,
+  updates: Partial<Omit<Prompt, 'id' | 'createdAt'>>
+) {
+  await updateDoc(doc(db, 'prompts', promptId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function getUserPrompts(userId: string): Promise<Prompt[]> {
@@ -101,10 +141,160 @@ export async function getUserPrompts(userId: string): Promise<Prompt[]> {
     return {
       id: d.id,
       ...data,
+      parameters: data.parameters ?? [],
+      visibility: data.visibility ?? 'private',
+      price: data.price ?? 0,
+      version: data.version ?? 1,
+      collaborators: data.collaborators ?? [],
       createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
       updatedAt: (data.updatedAt as Timestamp)?.toDate() ?? new Date(),
     } as Prompt;
   });
+}
+
+/**
+ * Returns all public prompts ordered by creation date (newest first).
+ * Used for trending analysis and discovery.
+ */
+export async function getPublicPrompts(maxResults = 50): Promise<Prompt[]> {
+  const q = query(
+    collection(db, 'prompts'),
+    where('visibility', '==', 'public'),
+    orderBy('createdAt', 'desc'),
+    limit(maxResults)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      parameters: data.parameters ?? [],
+      visibility: data.visibility ?? 'public',
+      price: data.price ?? 0,
+      version: data.version ?? 1,
+      collaborators: data.collaborators ?? [],
+      createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
+      updatedAt: (data.updatedAt as Timestamp)?.toDate() ?? new Date(),
+    } as Prompt;
+  });
+}
+
+/**
+ * Subscribes to real-time updates for a single prompt.
+ * Returns an unsubscribe function to cancel the listener.
+ */
+export function subscribeToPrompt(
+  promptId: string,
+  callback: (prompt: Prompt | null) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, 'prompts', promptId), (snap) => {
+    if (!snap.exists()) {
+      callback(null);
+      return;
+    }
+    const data = snap.data();
+    callback({
+      id: snap.id,
+      ...data,
+      parameters: data.parameters ?? [],
+      visibility: data.visibility ?? 'private',
+      price: data.price ?? 0,
+      version: data.version ?? 1,
+      collaborators: data.collaborators ?? [],
+      createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
+      updatedAt: (data.updatedAt as Timestamp)?.toDate() ?? new Date(),
+    } as Prompt);
+  });
+}
+
+// Version History
+
+/**
+ * Saves a snapshot of the current prompt state as a version entry.
+ */
+export async function savePromptVersion(
+  promptId: string,
+  versionData: Omit<PromptVersion, 'id' | 'savedAt'>
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'prompts', promptId, 'versions'), {
+    ...versionData,
+    savedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/**
+ * Returns all saved versions for a prompt, newest first.
+ */
+export async function getPromptVersions(promptId: string): Promise<PromptVersion[]> {
+  const q = query(
+    collection(db, 'prompts', promptId, 'versions'),
+    orderBy('version', 'desc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      parameters: data.parameters ?? [],
+      savedAt: (data.savedAt as Timestamp)?.toDate() ?? new Date(),
+    } as PromptVersion;
+  });
+}
+
+// Collaboration Presence
+
+/**
+ * Writes (or refreshes) a collaborator's presence record for a prompt.
+ * Call periodically or on cursor movement to keep the entry fresh.
+ */
+export async function updateCollaboratorPresence(
+  promptId: string,
+  presence: CollaboratorPresence
+): Promise<void> {
+  await setDoc(
+    doc(db, 'collaborationSessions', promptId, 'presence', presence.userId),
+    {
+      ...presence,
+      lastSeen: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * Removes a collaborator's presence record when they leave.
+ */
+export async function removeCollaboratorPresence(
+  promptId: string,
+  userId: string
+): Promise<void> {
+  await deleteDoc(doc(db, 'collaborationSessions', promptId, 'presence', userId));
+}
+
+/**
+ * Subscribes to the live presence list for a prompt.
+ * Returns an unsubscribe function.
+ */
+export function subscribeToCollaborators(
+  promptId: string,
+  callback: (collaborators: CollaboratorPresence[]) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'collaborationSessions', promptId, 'presence'),
+    (snap) => {
+      const collaborators = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          ...data,
+          lastSeen: (data.lastSeen as Timestamp)?.toDate() ?? new Date(),
+        } as CollaboratorPresence;
+      });
+      callback(collaborators);
+    }
+  );
 }
 
 /**
