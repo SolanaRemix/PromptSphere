@@ -13,6 +13,7 @@ import type { Prompt, CollaboratorPresence } from '@/types';
 
 const PRESENCE_INTERVAL_MS = 15_000; // heartbeat every 15 s
 const SAVE_DEBOUNCE_MS = 1_500;       // debounce saves by 1.5 s
+const CURSOR_THROTTLE_MS = 2_000;     // throttle cursor-only presence writes to once per 2 s
 /** Sentinel value used when editing a new (unsaved) prompt — disables all Firestore I/O. */
 const NEW_PROMPT_SENTINEL = '__new__';
 
@@ -61,6 +62,22 @@ export function useCollaboration({
   const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestCursorRef = useRef(0);
   const pendingUpdatesRef = useRef<Partial<Prompt> | null>(null);
+  /** Timestamp (ms) of the last cursor-only presence write, used for throttling. */
+  const lastCursorWriteRef = useRef(0);
+
+  // ---------------------------------------------------------------------------
+  // Clear pending save timer whenever promptId changes to prevent a stale
+  // timer from writing to the previous prompt after navigation.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      pendingUpdatesRef.current = null;
+    };
+  }, [promptId]);
 
   // ---------------------------------------------------------------------------
   // Subscribe to remote prompt changes
@@ -140,15 +157,20 @@ export function useCollaboration({
       latestCursorRef.current = cursorPosition;
       pendingUpdatesRef.current = { ...updates, version: currentVersion };
 
-      // Refresh cursor in presence (no-op for new prompts)
+      // Refresh cursor in presence — throttled to at most once per CURSOR_THROTTLE_MS
+      // to avoid a Firestore write on every keystroke.
       if (promptId !== NEW_PROMPT_SENTINEL) {
-        updateCollaboratorPresence(promptId, {
-          userId,
-          displayName,
-          photoURL,
-          cursorPosition,
-          lastSeen: new Date(),
-        }).catch((err) => console.warn('[useCollaboration] cursor update failed:', err));
+        const now = Date.now();
+        if (now - lastCursorWriteRef.current >= CURSOR_THROTTLE_MS) {
+          lastCursorWriteRef.current = now;
+          updateCollaboratorPresence(promptId, {
+            userId,
+            displayName,
+            photoURL,
+            cursorPosition,
+            lastSeen: new Date(),
+          }).catch((err) => console.warn('[useCollaboration] cursor update failed:', err));
+        }
       }
 
       // Debounce the Firestore write
@@ -177,13 +199,6 @@ export function useCollaboration({
     },
     [userId]
   );
-
-  // Cleanup pending timer on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, []);
 
   return { collaborators, isSaving, handleLocalChange, saveVersion };
 }

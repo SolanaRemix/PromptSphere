@@ -113,21 +113,23 @@ const TOPIC_CLUSTERS: Record<string, string[]> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Module-level stop-word set — allocated once, never re-allocated per call. */
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+  'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those',
+  'i', 'you', 'he', 'she', 'it', 'we', 'they', 'my', 'your', 'me', 'us',
+  'not', 'no', 'so', 'if', 'as', 'about', 'into', 'than', 'then', 'also',
+]);
+
 /** Extracts meaningful words from a string, ignoring stop-words. */
 function extractKeywords(text: string): string[] {
-  const stopWords = new Set([
-    'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-    'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those',
-    'i', 'you', 'he', 'she', 'it', 'we', 'they', 'my', 'your', 'me', 'us',
-    'not', 'no', 'so', 'if', 'as', 'about', 'into', 'than', 'then', 'also',
-  ]);
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter((w) => w.length > 2 && !stopWords.has(w));
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
 }
 
 /** Simple string similarity (Jaccard over word sets). */
@@ -194,12 +196,17 @@ export function generateSuggestions(
 
   // 2. Phrasing improvement suggestions -------------------------------------
   for (const { pattern, suggestion, description } of PHRASING_PATTERNS) {
-    if (pattern.test(content)) {
+    const matchIndex = content.search(pattern);
+    if (matchIndex !== -1) {
+      // Score is higher when the match appears earlier in the content
+      // (i.e., the pattern is central to the prompt rather than incidental).
+      const normalizedPosition =
+        content.length > 0 ? 1 - matchIndex / content.length : 1;
       suggestions.push({
         type: 'phrasing',
         text: suggestion,
         description,
-        relevance: 0.7 + Math.random() * 0.2, // keep phrasing tips prominent
+        relevance: 0.7 + normalizedPosition * 0.2,
       });
     }
   }

@@ -68,9 +68,6 @@ export default function PromptEditor({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // ---- Derived state -------------------------------------------------------
-  const parameters = extractParameters(content);
-
   // ---- AI suggestions ------------------------------------------------------
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [suggestionFilter, setSuggestionFilter] = useState<AISuggestion['type'] | 'all'>('all');
@@ -81,6 +78,23 @@ export default function PromptEditor({
 
   // ---- Active tab ----------------------------------------------------------
   const [activePanel, setActivePanel] = useState<'editor' | 'suggestions' | 'versions' | 'collab'>('editor');
+
+  // ---- Reset all local state when the prompt being edited changes ----------
+  useEffect(() => {
+    setTitle(prompt?.title ?? '');
+    setContent(prompt?.content ?? '');
+    setTags(prompt?.tags.join(', ') ?? '');
+    setVisibility(prompt?.visibility ?? 'private');
+    setPrice(prompt?.price ?? 0);
+    setVersion(prompt?.version ?? 1);
+    setSaveError(null);
+    setVersions([]);
+    setActivePanel('editor');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt?.id]);
+
+  // ---- Derived state -------------------------------------------------------
+  const parameters = extractParameters(content);
 
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
@@ -210,7 +224,7 @@ export default function PromptEditor({
           content,
           tags: tagList,
           parameters,
-          version,
+          version: version + 1,
         });
       }
 

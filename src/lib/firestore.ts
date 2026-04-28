@@ -5,7 +5,6 @@ import {
   getDocs,
   setDoc,
   addDoc,
-  updateDoc,
   deleteDoc,
   query,
   where,
@@ -14,6 +13,7 @@ import {
   Timestamp,
   onSnapshot,
   limit,
+  runTransaction,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -116,16 +116,29 @@ export async function getPromptById(promptId: string): Promise<Prompt | null> {
 }
 
 /**
- * Updates a prompt document. Only the owner may update their own prompt
- * (enforced by Firestore security rules).
+ * Updates a prompt document using a transaction to prevent lost updates from
+ * concurrent editors. The version is atomically incremented from the current
+ * stored value, so all concurrent saves are recorded in sequence rather than
+ * silently overwriting each other.
+ *
+ * Only the owner may update their own prompt (enforced by Firestore security rules).
  */
 export async function updatePrompt(
   promptId: string,
   updates: Partial<Omit<Prompt, 'id' | 'createdAt'>>
 ) {
-  await updateDoc(doc(db, 'prompts', promptId), {
-    ...updates,
-    updatedAt: serverTimestamp(),
+  const promptRef = doc(db, 'prompts', promptId);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(promptRef);
+    if (!snap.exists()) throw new Error('Prompt not found.');
+    const storedVersion: number = snap.data().version ?? 0;
+    // Always derive the next version from the current stored value so that two
+    // clients starting from the same base do not both write the same version number.
+    transaction.update(promptRef, {
+      ...updates,
+      version: storedVersion + 1,
+      updatedAt: serverTimestamp(),
+    });
   });
 }
 
