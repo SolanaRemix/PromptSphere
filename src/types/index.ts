@@ -4,7 +4,9 @@ export interface User {
   displayName: string;
   photoURL: string;
   role: 'user' | 'admin';
+  /** Subscription tier; stored as `tier` in Firestore for backward-compatibility. */
   tier: 'free' | 'starter' | 'pro';
+  affiliateId?: string;
   createdAt: Date;
 }
 
@@ -24,6 +26,16 @@ export interface Prompt {
   version: number;
   /** UIDs of users currently collaborating on this prompt */
   collaborators: string[];
+  /** Category for marketplace discovery */
+  category?: string;
+  /** Average rating 0–5 */
+  rating?: number;
+  /** Number of ratings */
+  ratingCount?: number;
+  /** Number of times purchased */
+  salesCount?: number;
+  /** Short description shown in the marketplace */
+  description?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -69,3 +81,75 @@ export interface ActivityLog {
   timestamp: Date;
   metadata?: Record<string, unknown>;
 }
+
+export interface MarketplaceListing {
+  id: string;
+  promptId: string;
+  ownerId: string;
+  ownerName: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  popularityScore: number;
+  salesCount: number;
+  rating: number;
+  ratingCount: number;
+  tags: string[];
+  affiliateLinks: AffiliateLink[];
+  createdAt: Date;
+}
+
+export interface AffiliateLink {
+  affiliateId: string;
+  url: string;
+  clicks: number;
+  conversions: number;
+}
+
+export interface Affiliate {
+  id: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  commissionRate: number;
+  referrals: AffiliateReferral[];
+  totalEarnings: number;
+  pendingPayout: number;
+  createdAt: Date;
+}
+
+export interface AffiliateReferral {
+  paymentId: string;
+  promptId: string;
+  amount: number;
+  commission: number;
+  createdAt: Date;
+}
+
+export type PaymentMethod = 'stripe' | 'paypal' | 'cashapp' | 'gcash' | 'google_pay' | 'credit_card';
+export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
+
+export interface Payment {
+  id: string;
+  userId: string;
+  promptId: string;
+  amount: number;
+  currency: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  affiliateId?: string;
+  createdAt: Date;
+}
+
+export type PromptCategory =
+  | 'writing'
+  | 'coding'
+  | 'business'
+  | 'education'
+  | 'creative'
+  | 'productivity'
+  | 'marketing'
+  | 'research'
+  | 'other';
+
