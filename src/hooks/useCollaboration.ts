@@ -137,10 +137,11 @@ export function useCollaboration({
     if (promptId === NEW_PROMPT_SENTINEL) return;
     setIsSaving(true);
     try {
-      await updatePrompt(promptId, {
-        ...updates,
-        version: (updates.version ?? 1) + 1,
-      });
+      // Omit version — the transaction inside updatePrompt atomically derives
+      // it from the stored document and is the single source of truth.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { version: _version, ...fieldsToUpdate } = updates;
+      await updatePrompt(promptId, fieldsToUpdate);
     } catch (err) {
       console.error('[useCollaboration] save failed:', err);
     } finally {

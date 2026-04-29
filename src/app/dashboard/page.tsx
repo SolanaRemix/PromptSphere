@@ -49,29 +49,35 @@ export default function DashboardPage() {
   }, [user, loadPrompts]);
 
   const handleSavePrompt = useCallback(
-    async (data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
-      if (!user) return;
+    async (data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>): Promise<number | undefined> => {
+      if (!user) return undefined;
 
       if (editorPrompt && editorPrompt.id) {
-        // Editing an existing prompt
-        await updatePrompt(editorPrompt.id, {
+        // Editing an existing prompt.
+        // version is intentionally omitted — the transaction inside updatePrompt
+        // atomically derives and returns the new version.
+        const newVersion = await updatePrompt(editorPrompt.id, {
           title: data.title,
           content: data.content,
           tags: data.tags,
           parameters: extractParameters(data.content),
           visibility: data.visibility,
           price: data.price,
-          version: data.version,
         });
+        setEditorPrompt(undefined);
+        await loadPrompts();
+        return newVersion;
       } else {
-        // Creating a new prompt
+        // Creating a new prompt — always start at version 1.
         await createPrompt({
           ...data,
           parameters: extractParameters(data.content),
+          version: 1,
         });
+        setEditorPrompt(undefined);
+        await loadPrompts();
+        return undefined;
       }
-      setEditorPrompt(undefined);
-      await loadPrompts();
     },
     [user, editorPrompt, loadPrompts]
   );

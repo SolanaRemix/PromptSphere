@@ -20,9 +20,11 @@ service cloud.firestore {
 
     // Helper: true when the authenticated user can read the given prompt
     // (either owner, or the prompt is publicly visible).
+    // Returns false if the prompt document doesn't exist.
     function canReadPrompt(promptId) {
       let p = get(/databases/$(database)/documents/prompts/$(promptId)).data;
       return request.auth != null
+        && p != null
         && (p.userId == request.auth.uid || p.visibility == 'public');
     }
 
@@ -47,10 +49,12 @@ service cloud.firestore {
         // Reads are restricted to users who can access the parent prompt
         // (owner, or prompt is public).
         allow read: if canReadPrompt(promptId);
-        // The userId written into the version document must match the caller.
-        // This avoids a per-write read of the parent prompt document.
+        // Only the owner of the parent prompt may append version entries, and
+        // the version document must reference the correct parent promptId.
         allow create: if request.auth != null
-          && request.resource.data.userId == request.auth.uid;
+          && get(/databases/$(database)/documents/prompts/$(promptId)).data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.promptId == promptId;
         // Versions are immutable once written
         allow update, delete: if false;
       }
@@ -75,8 +79,11 @@ service cloud.firestore {
       match /presence/{presenceUserId} {
         // Only users who can read the prompt may see who is collaborating on it.
         allow read: if canReadPrompt(promptId);
-        // Users may only write (create/update/delete) their own presence record.
-        allow write: if request.auth != null && request.auth.uid == presenceUserId;
+        // Users may only write their own presence record, and only for prompts
+        // they are allowed to access (prevents spamming arbitrary promptIds).
+        allow write: if request.auth != null
+          && request.auth.uid == presenceUserId
+          && canReadPrompt(promptId);
       }
     }
   }

@@ -121,25 +121,32 @@ export async function getPromptById(promptId: string): Promise<Prompt | null> {
  * stored value, so all concurrent saves are recorded in sequence rather than
  * silently overwriting each other.
  *
+ * Returns the new version number as committed by the transaction, which callers
+ * should use (e.g. to label a version-history snapshot) so that the stored
+ * document version and the snapshot version are always in sync.
+ *
  * Only the owner may update their own prompt (enforced by Firestore security rules).
  */
 export async function updatePrompt(
   promptId: string,
-  updates: Partial<Omit<Prompt, 'id' | 'createdAt'>>
-) {
+  updates: Partial<Omit<Prompt, 'id' | 'createdAt' | 'version'>>
+): Promise<number> {
   const promptRef = doc(db, 'prompts', promptId);
+  let newVersion = 0;
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(promptRef);
     if (!snap.exists()) throw new Error('Prompt not found.');
     const storedVersion: number = snap.data().version ?? 0;
     // Always derive the next version from the current stored value so that two
     // clients starting from the same base do not both write the same version number.
+    newVersion = storedVersion + 1;
     transaction.update(promptRef, {
       ...updates,
-      version: storedVersion + 1,
+      version: newVersion,
       updatedAt: serverTimestamp(),
     });
   });
+  return newVersion;
 }
 
 export async function getUserPrompts(userId: string): Promise<Prompt[]> {

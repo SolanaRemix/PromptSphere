@@ -41,8 +41,8 @@ interface PromptEditorProps {
   userId: string;
   displayName: string;
   photoURL: string;
-  /** Called when the user saves successfully. */
-  onSave: (data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  /** Called when the user saves successfully. Returns the persisted version number (edit) or undefined (create). */
+  onSave: (data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => Promise<number | undefined>;
   /** Called when the user cancels. */
   onCancel: () => void;
   /** Existing prompts for AI suggestion context. */
@@ -204,7 +204,9 @@ export default function PromptEditor({
         .map((t) => t.trim())
         .filter(Boolean);
 
-      await onSave({
+      // For creates always start at version 1; for edits the transaction on the
+      // server returns the real new version which we use for the snapshot below.
+      const savedVersion = await onSave({
         userId,
         title,
         content,
@@ -212,11 +214,13 @@ export default function PromptEditor({
         parameters,
         visibility,
         price,
-        version: version + 1,
+        version: prompt ? version + 1 : 1,
         collaborators: prompt?.collaborators ?? [],
       });
 
-      // Save a version snapshot if editing an existing prompt
+      // Save a version snapshot if editing an existing prompt.
+      // Use the server-authoritative version returned by onSave so that the
+      // snapshot label always matches the persisted document version.
       if (prompt?.id) {
         await saveVersion({
           promptId: prompt.id,
@@ -224,11 +228,16 @@ export default function PromptEditor({
           content,
           tags: tagList,
           parameters,
-          version: version + 1,
+          version: savedVersion ?? version + 1,
         });
       }
 
-      setVersion((v) => v + 1);
+      // Sync local version state with whatever was actually persisted.
+      if (savedVersion !== undefined) {
+        setVersion(savedVersion);
+      } else {
+        setVersion((v) => v + 1);
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed.');
     } finally {
