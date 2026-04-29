@@ -18,6 +18,16 @@ service cloud.firestore {
         && request.auth.token.email == "gxqstudio@gmail.com";
     }
 
+    // Helper: true when the authenticated user can read the given prompt
+    // (either owner, or the prompt is publicly visible).
+    // Returns false if the prompt document doesn't exist.
+    function canReadPrompt(promptId) {
+      let p = get(/databases/$(database)/documents/prompts/$(promptId)).data;
+      return request.auth != null
+        && p != null
+        && (p.userId == request.auth.uid || p.visibility == 'public');
+    }
+
     // Users collection
     match /users/{uid} {
       // Any authenticated user may read and write their own document
@@ -33,6 +43,21 @@ service cloud.firestore {
       // Only the owner may update or delete their own prompt
       allow update, delete: if request.auth != null
         && resource.data.userId == request.auth.uid;
+
+      // Version history sub-collection
+      match /versions/{versionId} {
+        // Reads are restricted to users who can access the parent prompt
+        // (owner, or prompt is public).
+        allow read: if canReadPrompt(promptId);
+        // Only the owner of the parent prompt may append version entries, and
+        // the version document must reference the correct parent promptId.
+        allow create: if request.auth != null
+          && get(/databases/$(database)/documents/prompts/$(promptId)).data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.promptId == promptId;
+        // Versions are immutable once written
+        allow update, delete: if false;
+      }
     }
 
     // Roles collection – read-only for authenticated users, write requires admin
@@ -46,5 +71,21 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow read, list: if isAdmin();
     }
+
+    // Real-time collaboration presence sessions.
+    // Presence reads are scoped to users who can access the underlying prompt,
+    // so private prompt collaborators are not visible to arbitrary signed-in users.
+    match /collaborationSessions/{promptId} {
+      match /presence/{presenceUserId} {
+        // Only users who can read the prompt may see who is collaborating on it.
+        allow read: if canReadPrompt(promptId);
+        // Users may only write their own presence record, and only for prompts
+        // they are allowed to access (prevents spamming arbitrary promptIds).
+        allow write: if request.auth != null
+          && request.auth.uid == presenceUserId
+          && canReadPrompt(promptId);
+      }
+    }
   }
 }
+
