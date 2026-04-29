@@ -106,6 +106,16 @@ export default function PaymentModal({ listing, onClose, onSuccess }: PaymentMod
           <>
             {(selected === 'stripe' || selected === 'credit_card') ? (
               <div className="space-y-4 mb-6">
+                {/* Demo notice — in production replace with Stripe Elements or
+                    another provider-hosted card UI so raw card data never
+                    enters application state. */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                  <span className="text-yellow-400 text-sm">⚠️</span>
+                  <p className="text-yellow-300 text-xs">
+                    <strong>Demo mode:</strong> no real card data is processed.
+                    Use test number <span className="font-mono">4242 4242 4242 4242</span>.
+                  </p>
+                </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Card Number</label>
                   <input

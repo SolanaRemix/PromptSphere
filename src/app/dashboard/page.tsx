@@ -21,7 +21,7 @@ import { Prompt, Affiliate, Payment } from '@/types';
 import Link from 'next/link';
 import { signOut } from '@/lib/auth';
 import { extractParameters } from '@/lib/aiSuggestions';
-import { DEFAULT_COMMISSION_RATE } from '@/lib/utils';
+import { DEFAULT_COMMISSION_RATE, formatDate } from '@/lib/utils';
 
 export default function DashboardPage() {
   const { user, loading, isAdmin } = useAuth();
@@ -426,9 +426,7 @@ export default function DashboardPage() {
                           <div>
                             <p className="text-gray-300 font-mono text-xs">{r.promptId.slice(0, 12)}…</p>
                             <p className="text-gray-500 text-xs mt-0.5">
-                              {r.createdAt instanceof Date
-                                ? r.createdAt.toLocaleDateString()
-                                : new Date(r.createdAt).toLocaleDateString()}
+                              {formatDate(r.createdAt)}
                             </p>
                           </div>
                           <div className="text-right">

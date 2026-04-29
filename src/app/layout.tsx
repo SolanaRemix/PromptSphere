@@ -30,20 +30,11 @@ export const metadata: Metadata = {
     title: 'PromptSphere — AI Prompt Marketplace',
     description:
       'Discover, create, buy, and sell powerful AI prompts. Trending feed, affiliate programme, and multi-provider payments.',
-    images: [
-      {
-        url: `${APP_URL}/og-image.png`,
-        width: 1200,
-        height: 630,
-        alt: 'PromptSphere — AI Prompt Marketplace',
-      },
-    ],
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     title: 'PromptSphere — AI Prompt Marketplace',
     description: 'Discover, create, buy, and sell powerful AI prompts.',
-    images: [`${APP_URL}/og-image.png`],
     creator: '@promptsphere',
   },
   robots: {

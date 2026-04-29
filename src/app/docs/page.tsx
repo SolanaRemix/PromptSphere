@@ -4,7 +4,7 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Documentation & User Guide — PromptSphere',
+  title: 'Documentation & User Guide',
   description:
     'Learn how to use PromptSphere: create prompts, publish to the marketplace, set up affiliates, and manage payments.',
   openGraph: {
@@ -49,7 +49,7 @@ const SECTIONS = [
       },
       {
         heading: 'Ratings & Reviews',
-        body: 'After purchasing or downloading a free prompt, you can leave a 1–5 star rating. Ratings update the listing\'s average score in real time using Firestore transactions.',
+        body: 'After purchasing or downloading a free prompt, you can leave a 1–5 star rating. Each user can rate a prompt once and update their rating at any time. The listing\'s average score is updated automatically using an incremental Firestore transaction so no full-collection scan is needed.',
       },
       {
         heading: 'Trending Feed',
@@ -91,7 +91,7 @@ const SECTIONS = [
       },
       {
         heading: 'Security',
-        body: 'All transactions are encrypted in transit. Card details are tokenised and never stored on our servers. Payment records are stored in Firestore with restricted access.',
+        body: 'The checkout flow in this version is a demonstration UI. All payment steps are simulated: no real card data is transmitted or stored, and no actual charges are made. In a production deployment, card fields would be replaced with provider-hosted elements (e.g. Stripe Elements) so that raw card data never touches the application server. Payment records are stored in Firestore with restricted access.',
       },
       {
         heading: 'Refunds',
@@ -118,7 +118,7 @@ const SECTIONS = [
       },
       {
         heading: 'Sitemap & Robots',
-        body: 'The sitemap at /sitemap.xml is auto-generated and includes all public marketplace listings. The robots.txt at /robots.txt is configured to allow all crawlers on public pages.',
+        body: 'The sitemap at /sitemap.xml is auto-generated and includes all main public pages. The robots.txt at /robots.txt is configured to allow all crawlers on public pages while blocking dashboard and admin routes.',
       },
     ],
   },

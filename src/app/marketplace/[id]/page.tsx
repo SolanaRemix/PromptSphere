@@ -10,6 +10,7 @@ import {
   createPayment,
   recordAffiliateReferral,
   getAffiliateByUserId,
+  getAffiliateById,
   hasUserPurchasedPrompt,
   ratePrompt,
   incrementPopularityScore,
@@ -111,27 +112,32 @@ function MarketplaceDetailInner() {
   const handlePaymentSuccess = async (method: PaymentMethod) => {
     if (!user || !listing) return;
     try {
+      // Write a `pending` payment intent from the client.
+      // ⚠️  PRODUCTION NOTE: In a production app a server-side webhook (Stripe,
+      // PayPal, etc.) should be responsible for transitioning this record to
+      // `completed` after verifying the provider's payment confirmation.
       const paymentId = await createPayment({
         userId: user.uid,
         promptId,
         amount: listing.price,
         currency: 'USD',
         method,
-        status: 'completed',
+        status: 'pending',
         affiliateId: refAffiliateId ?? undefined,
       });
 
-      // Credit affiliate if referred
+      // Credit affiliate if referred — use the affiliate's stored commission
+      // rate via a direct document lookup (affiliateId == document ID).
       if (refAffiliateId) {
-        // Fetch the affiliate's actual commission rate to use the correct value.
         let commissionRate = DEFAULT_COMMISSION_RATE;
         try {
-          const aff = await getAffiliateByUserId(refAffiliateId);
+          const aff = await getAffiliateById(refAffiliateId);
           if (aff) commissionRate = aff.commissionRate;
         } catch {
-          // Fall back to the default if the lookup fails.
+          // Fall back to the default rate if the lookup fails.
         }
-        const commission = listing.price * commissionRate;
+        // Round to nearest integer cent to avoid floating-point drift.
+        const commission = Math.round(listing.price * commissionRate);
         await recordAffiliateReferral(refAffiliateId, {
           paymentId,
           promptId,

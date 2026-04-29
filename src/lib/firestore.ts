@@ -493,6 +493,10 @@ export async function incrementPopularityScore(
 /**
  * Records a completed payment and increments the prompt's sales count.
  * Returns the new payment document ID.
+ *
+ * ⚠️  PRODUCTION NOTE: The client should only ever write a `pending` payment.
+ * A trusted backend (Cloud Function / webhook) should be responsible for
+ * transitioning status to `completed` after verifying the provider receipt.
  */
 export async function createPayment(data: {
   userId: string;
@@ -508,13 +512,15 @@ export async function createPayment(data: {
     createdAt: serverTimestamp(),
   });
 
-  // Atomically increment the prompt's sales count in the marketplace listing.
-  const listing = await getMarketplaceListingByPromptId(data.promptId);
-  if (listing) {
-    await updateDoc(doc(db, 'marketplace', listing.id), {
-      salesCount: increment(1),
-      popularityScore: increment(5),
-    });
+  // Only update marketplace counts for confirmed (completed) payments.
+  if (data.status === 'completed') {
+    const listing = await getMarketplaceListingByPromptId(data.promptId);
+    if (listing) {
+      await updateDoc(doc(db, 'marketplace', listing.id), {
+        salesCount: increment(1),
+        popularityScore: increment(5),
+      });
+    }
   }
 
   return ref.id;
@@ -555,65 +561,115 @@ export async function getUserPayments(userId: string): Promise<Payment[]> {
   });
 }
 
-/** Checks if a user has already purchased a given prompt. */
+/** Checks if a user has already purchased a given prompt.
+ *
+ * Checks for both `completed` and `pending` status:
+ * - `completed` = payment verified server-side (production flow).
+ * - `pending` = payment intent recorded client-side; included here to support
+ *   the demo checkout flow while a real webhook integration is absent.
+ *   In production, only `completed` should unlock prompt content.
+ */
 export async function hasUserPurchasedPrompt(
   userId: string,
   promptId: string
 ): Promise<boolean> {
-  const q = query(
+  // Check completed first (most common in production).
+  const completedQ = query(
     collection(db, 'payments'),
     where('userId', '==', userId),
     where('promptId', '==', promptId),
     where('status', '==', 'completed'),
     limit(1)
   );
-  const snap = await getDocs(q);
-  return !snap.empty;
+  const completedSnap = await getDocs(completedQ);
+  if (!completedSnap.empty) return true;
+
+  // Fall back to pending (demo / awaiting webhook).
+  const pendingQ = query(
+    collection(db, 'payments'),
+    where('userId', '==', userId),
+    where('promptId', '==', promptId),
+    where('status', '==', 'pending'),
+    limit(1)
+  );
+  const pendingSnap = await getDocs(pendingQ);
+  return !pendingSnap.empty;
 }
 
 // ---------------------------------------------------------------------------
 // Affiliates
 // ---------------------------------------------------------------------------
 
-/** Creates an affiliate record for a user. Returns the affiliate document ID. */
+/** Creates an affiliate record for a user. Returns the affiliate document ID.
+ *
+ * Uses `userId` as the document ID so repeated calls are idempotent and
+ * a user can never have more than one affiliate record.
+ */
 export async function createAffiliate(data: {
   userId: string;
   displayName: string;
   email: string;
   commissionRate?: number;
 }): Promise<string> {
-  const ref = await addDoc(collection(db, 'affiliates'), {
-    ...data,
+  // Idempotent: return the existing record without overwriting it.
+  const existing = await getAffiliateByUserId(data.userId);
+  if (existing) return existing.id;
+
+  // Use userId as the stable document ID to prevent duplicates.
+  await setDoc(doc(db, 'affiliates', data.userId), {
+    userId: data.userId,
+    displayName: data.displayName,
+    email: data.email,
     commissionRate: data.commissionRate ?? DEFAULT_COMMISSION_RATE,
-    referrals: [],
     totalEarnings: 0,
     pendingPayout: 0,
     createdAt: serverTimestamp(),
   });
 
-  // Store the affiliateId back on the user document.
-  await updateDoc(doc(db, 'users', data.userId), { affiliateId: ref.id });
+  // Back-link the affiliateId on the user document.
+  await updateDoc(doc(db, 'users', data.userId), { affiliateId: data.userId });
 
-  return ref.id;
+  return data.userId;
 }
 
 /** Returns the affiliate record for a given userId, or null. */
 export async function getAffiliateByUserId(
   userId: string
 ): Promise<Affiliate | null> {
-  const q = query(
-    collection(db, 'affiliates'),
-    where('userId', '==', userId),
-    limit(1)
+  return getAffiliateById(userId);
+}
+
+/**
+ * Returns an affiliate record by its document ID (affiliateId == userId).
+ * Fetches the referrals sub-collection and normalises any Firestore Timestamp
+ * values on individual referral entries.
+ */
+export async function getAffiliateById(
+  affiliateId: string
+): Promise<Affiliate | null> {
+  const snap = await getDoc(doc(db, 'affiliates', affiliateId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+
+  // Fetch referrals from sub-collection and normalise timestamps.
+  const referralsSnap = await getDocs(
+    collection(db, 'affiliates', affiliateId, 'referrals')
   );
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const d = snap.docs[0];
-  const data = d.data();
+  const referrals: AffiliateReferral[] = referralsSnap.docs.map((d) => {
+    const r = d.data();
+    return {
+      ...r,
+      createdAt:
+        r.createdAt instanceof Timestamp
+          ? r.createdAt.toDate()
+          : new Date(r.createdAt ?? Date.now()),
+    } as AffiliateReferral;
+  });
+
   return {
-    id: d.id,
+    id: snap.id,
     ...data,
-    referrals: data.referrals ?? [],
+    referrals,
     createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
   } as Affiliate;
 }
@@ -625,35 +681,43 @@ export async function getAffiliateByUserId(
 export async function getAllAffiliates(): Promise<Affiliate[]> {
   const q = query(collection(db, 'affiliates'), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
+  // Referrals are stored as a sub-collection; omit them in the admin list view
+  // to avoid N+1 reads. Fetch per-affiliate if detail is required.
   return snap.docs.map((d) => {
     const data = d.data();
     return {
       id: d.id,
       ...data,
-      referrals: data.referrals ?? [],
+      referrals: [] as Affiliate['referrals'],
       createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
-    } as Affiliate;
+    } as unknown as Affiliate;
   });
 }
 
 /**
- * Records a referral against an affiliate and adds the commission amount
- * to their pendingPayout. Called after a payment is confirmed.
+ * Records a referral as a document in the affiliate's `referrals`
+ * sub-collection, then atomically increments the aggregate totals on the
+ * parent document.  Using a sub-collection avoids the 1 MB document-size
+ * limit that a growing array would eventually hit.
  */
 export async function recordAffiliateReferral(
   affiliateId: string,
   referral: AffiliateReferral
 ): Promise<void> {
-  const ref = doc(db, 'affiliates', affiliateId);
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(ref);
-    if (!snap.exists()) throw new Error('Affiliate not found');
-    const existing: AffiliateReferral[] = snap.data().referrals ?? [];
-    transaction.update(ref, {
-      referrals: [...existing, referral],
-      totalEarnings: increment(referral.commission),
-      pendingPayout: increment(referral.commission),
-    });
+  // Store the referral as an individual document (keyed by paymentId to be
+  // idempotent in case of retries).
+  await setDoc(
+    doc(db, 'affiliates', affiliateId, 'referrals', referral.paymentId),
+    {
+      ...referral,
+      createdAt: serverTimestamp(),
+    }
+  );
+
+  // Atomically update the aggregate fields on the parent document.
+  await updateDoc(doc(db, 'affiliates', affiliateId), {
+    totalEarnings: increment(referral.commission),
+    pendingPayout: increment(referral.commission),
   });
 }
 
@@ -670,25 +734,47 @@ export function buildAffiliateUrl(
 // Ratings
 // ---------------------------------------------------------------------------
 
-/** Submits a star rating (1–5) for a marketplace prompt and updates the average. */
+/**
+ * Submits a star rating (1–5) for a marketplace prompt and updates the
+ * aggregate average incrementally using a Firestore transaction.
+ *
+ * Storing each user's rating as a separate sub-collection document (keyed by
+ * userId) ensures one-rating-per-user.  The aggregate is maintained on the
+ * listing document itself (ratingSum + ratingCount) to avoid full-collection
+ * scans on every write.
+ */
 export async function ratePrompt(
   listingId: string,
   userId: string,
   stars: number
 ): Promise<void> {
+  const listingRef = doc(db, 'marketplace', listingId);
   const ratingRef = doc(db, 'marketplace', listingId, 'ratings', userId);
-  await setDoc(ratingRef, { stars, userId, createdAt: serverTimestamp() });
 
-  // Recalculate the average from all rating docs.
-  const ratingsSnap = await getDocs(
-    collection(db, 'marketplace', listingId, 'ratings')
-  );
-  const allStars = ratingsSnap.docs.map((d) => (d.data().stars as number) ?? 0);
-  const avg = allStars.reduce((s, v) => s + v, 0) / allStars.length;
+  await runTransaction(db, async (transaction) => {
+    const [listingSnap, ratingSnap] = await Promise.all([
+      transaction.get(listingRef),
+      transaction.get(ratingRef),
+    ]);
 
-  await updateDoc(doc(db, 'marketplace', listingId), {
-    rating: parseFloat(avg.toFixed(2)),
-    ratingCount: allStars.length,
+    const listing = listingSnap.data() ?? {};
+    const prevStars: number = ratingSnap.exists()
+      ? (ratingSnap.data()?.stars ?? 0)
+      : 0;
+    const prevSum: number = listing.ratingSum ?? 0;
+    const prevCount: number = listing.ratingCount ?? 0;
+
+    const isUpdate = ratingSnap.exists();
+    const newCount = isUpdate ? prevCount : prevCount + 1;
+    const newSum = prevSum - prevStars + stars;
+    const newAvg = parseFloat((newSum / newCount).toFixed(2));
+
+    transaction.set(ratingRef, { stars, userId, createdAt: serverTimestamp() });
+    transaction.update(listingRef, {
+      ratingSum: newSum,
+      ratingCount: newCount,
+      rating: newAvg,
+    });
   });
 }
 
