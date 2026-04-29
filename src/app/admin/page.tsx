@@ -16,6 +16,7 @@ import UserTable from '@/components/UserTable';
 import { User, Role, ActivityLog, Payment, Affiliate } from '@/types';
 import Link from 'next/link';
 import { signOut, ADMIN_EMAIL } from '@/lib/auth';
+import { formatDate, formatDateTime } from '@/lib/utils';
 
 export default function AdminPage() {
   const { user, loading, isAdmin } = useAuth();
@@ -260,9 +261,7 @@ export default function AdminPage() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-gray-500 text-xs">
-                              {p.createdAt instanceof Date
-                                ? p.createdAt.toLocaleDateString()
-                                : new Date(p.createdAt).toLocaleDateString()}
+                              {formatDate(p.createdAt)}
                             </td>
                           </tr>
                         ))}
@@ -313,9 +312,7 @@ export default function AdminPage() {
                               ${(a.pendingPayout / 100).toFixed(2)}
                             </td>
                             <td className="px-4 py-3 text-gray-500 text-xs">
-                              {a.createdAt instanceof Date
-                                ? a.createdAt.toLocaleDateString()
-                                : new Date(a.createdAt).toLocaleDateString()}
+                              {formatDate(a.createdAt)}
                             </td>
                           </tr>
                         ))}
@@ -374,9 +371,7 @@ export default function AdminPage() {
                             <span className="text-gray-500 text-sm ml-3">by {log.userId}</span>
                           </div>
                           <span className="text-gray-500 text-sm">
-                            {log.timestamp instanceof Date
-                              ? log.timestamp.toLocaleString()
-                              : new Date(log.timestamp).toLocaleString()}
+                            {formatDateTime(log.timestamp)}
                           </span>
                         </div>
                         {log.metadata && (

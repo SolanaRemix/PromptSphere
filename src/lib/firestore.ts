@@ -19,6 +19,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { DEFAULT_COMMISSION_RATE } from './utils';
 import type {
   User,
   Prompt,
@@ -583,7 +584,7 @@ export async function createAffiliate(data: {
 }): Promise<string> {
   const ref = await addDoc(collection(db, 'affiliates'), {
     ...data,
-    commissionRate: data.commissionRate ?? 0.1,
+    commissionRate: data.commissionRate ?? DEFAULT_COMMISSION_RATE,
     referrals: [],
     totalEarnings: 0,
     pendingPayout: 0,

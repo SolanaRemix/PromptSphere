@@ -25,6 +25,7 @@ export default function PaymentModal({ listing, onClose, onSuccess }: PaymentMod
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
 
+  // Convert price from cents (Firestore storage) to dollars for display.
   const price = listing.price / 100;
 
   const handleProceed = () => {

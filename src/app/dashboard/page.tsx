@@ -21,6 +21,7 @@ import { Prompt, Affiliate, Payment } from '@/types';
 import Link from 'next/link';
 import { signOut } from '@/lib/auth';
 import { extractParameters } from '@/lib/aiSuggestions';
+import { DEFAULT_COMMISSION_RATE } from '@/lib/utils';
 
 export default function DashboardPage() {
   const { user, loading, isAdmin } = useAuth();
@@ -145,7 +146,7 @@ export default function DashboardPage() {
         userId: user.uid,
         displayName: user.displayName ?? 'Anonymous',
         email: user.email ?? '',
-        commissionRate: 0.1,
+        commissionRate: DEFAULT_COMMISSION_RATE,
       });
       await loadAffiliate();
     } catch (err) {

@@ -20,6 +20,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import type { MarketplaceListing, Prompt, PaymentMethod } from '@/types';
 import Link from 'next/link';
+import { DEFAULT_COMMISSION_RATE } from '@/lib/utils';
 
 function StarRating({ rating, count }: { rating: number; count: number }) {
   return (
@@ -122,7 +123,14 @@ function MarketplaceDetailInner() {
 
       // Credit affiliate if referred
       if (refAffiliateId) {
-        const commissionRate = 0.1;
+        // Fetch the affiliate's actual commission rate to use the correct value.
+        let commissionRate = DEFAULT_COMMISSION_RATE;
+        try {
+          const aff = await getAffiliateByUserId(refAffiliateId);
+          if (aff) commissionRate = aff.commissionRate;
+        } catch {
+          // Fall back to the default if the lookup fails.
+        }
         const commission = listing.price * commissionRate;
         await recordAffiliateReferral(refAffiliateId, {
           paymentId,

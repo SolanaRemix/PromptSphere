@@ -4,8 +4,8 @@ export interface User {
   displayName: string;
   photoURL: string;
   role: 'user' | 'admin';
+  /** Subscription tier; stored as `tier` in Firestore for backward-compatibility. */
   tier: 'free' | 'starter' | 'pro';
-  subscriptionTier?: 'free' | 'starter' | 'pro';
   affiliateId?: string;
   createdAt: Date;
 }
