@@ -86,6 +86,44 @@ service cloud.firestore {
           && canReadPrompt(promptId);
       }
     }
+
+    // Marketplace listings – public read, owner or admin write.
+    match /marketplace/{listingId} {
+      allow read, list: if true;
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update: if request.auth != null
+        && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+
+      // Ratings sub-collection – any authenticated user may read/write their own rating.
+      match /ratings/{userId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Payments – authenticated users can create; read own records; admin reads all.
+    match /payments/{paymentId} {
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      // Payments are immutable once written; only admin can update (e.g. refund).
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // Affiliates – authenticated users can create their own record; read own; admin reads all.
+    match /affiliates/{affiliateId} {
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow read, update: if request.auth != null
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow delete: if isAdmin();
+    }
   }
 }
 

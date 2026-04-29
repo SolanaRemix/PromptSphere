@@ -23,11 +23,17 @@ export default function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center space-x-8">
+            <Link href="/marketplace" className="text-gray-300 hover:text-brand-purple transition-colors">
+              Marketplace
+            </Link>
             <Link href="/#features" className="text-gray-300 hover:text-brand-purple transition-colors">
               Features
             </Link>
             <Link href="/#pricing" className="text-gray-300 hover:text-brand-purple transition-colors">
               Pricing
+            </Link>
+            <Link href="/docs" className="text-gray-300 hover:text-brand-purple transition-colors">
+              Docs
             </Link>
             {user && (
               <Link href="/dashboard" className="text-gray-300 hover:text-brand-purple transition-colors">
