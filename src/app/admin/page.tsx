@@ -11,6 +11,7 @@ import {
   getActivityLogs,
   getAllPayments,
   getAllAffiliates,
+  refundPayment,
 } from '@/lib/firestore';
 import UserTable from '@/components/UserTable';
 import { User, Role, ActivityLog, Payment, Affiliate } from '@/types';
@@ -30,6 +31,9 @@ export default function AdminPage() {
     'users' | 'roles' | 'settings' | 'logs' | 'payments' | 'affiliates' | 'spam' | 'apikeys'
   >('users');
   const [dataLoading, setDataLoading] = useState(true);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [platformFee, setPlatformFee] = useState(10);
+  const [defaultCommission, setDefaultCommission] = useState(10);
 
   useEffect(() => {
     if (!loading) {
@@ -67,6 +71,21 @@ export default function AdminPage() {
       console.error('Error loading admin data:', error);
     } finally {
       setDataLoading(false);
+    }
+  };
+
+  const handleRefund = async (paymentId: string) => {
+    if (!confirm('Mark this payment as refunded?')) return;
+    setRefundingId(paymentId);
+    try {
+      await refundPayment(paymentId);
+      setPayments((prev) =>
+        prev.map((p) => (p.id === paymentId ? { ...p, status: 'refunded' } : p))
+      );
+    } catch (err) {
+      console.error('Refund error:', err);
+    } finally {
+      setRefundingId(null);
     }
   };
 
@@ -228,7 +247,7 @@ export default function AdminPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-dark-700">
                         <tr>
-                          {['User', 'Amount', 'Method', 'Status', 'Date'].map((h) => (
+                          {['User', 'Amount', 'Method', 'Status', 'Date', 'Action'].map((h) => (
                             <th key={h} className="px-4 py-3 text-left text-gray-400 font-medium">
                               {h}
                             </th>
@@ -262,6 +281,17 @@ export default function AdminPage() {
                             </td>
                             <td className="px-4 py-3 text-gray-500 text-xs">
                               {formatDate(p.createdAt)}
+                            </td>
+                            <td className="px-4 py-3">
+                              {(p.status === 'completed' || p.status === 'pending') && (
+                                <button
+                                  onClick={() => handleRefund(p.id)}
+                                  disabled={refundingId === p.id}
+                                  className="text-xs px-2 py-1 rounded-lg bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+                                >
+                                  {refundingId === p.id ? '…' : 'Refund'}
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -468,6 +498,70 @@ export default function AdminPage() {
 
             {activeTab === 'settings' && (
               <div className="space-y-6">
+                {/* Fee Configuration */}
+                <div className="glass-card rounded-2xl p-6">
+                  <h2 className="text-lg font-semibold text-white mb-1">💰 Fee Configuration</h2>
+                  <p className="text-gray-500 text-xs mb-4">
+                    Configure platform fees and default affiliate commission rates.
+                    Changes are previewed here for this session; to persist them, store the values in
+                    your environment variables or a Firestore config document.
+                  </p>
+                  {platformFee + defaultCommission > 100 && (
+                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
+                      ⚠️ Platform fee + affiliate commission exceeds 100%. The seller would receive a negative amount — please reduce one or both values.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">
+                        Platform Fee (%)
+                        <span className="text-gray-500 text-xs ml-2">— charged on each sale</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.5}
+                          value={platformFee}
+                          onChange={(e) => setPlatformFee(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                          className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-brand-purple text-sm"
+                        />
+                        <span className="text-gray-400 text-sm">%</span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-600">
+                        Platform keeps {platformFee}% of each transaction.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">
+                        Default Affiliate Commission (%)
+                        <span className="text-gray-500 text-xs ml-2">— paid to referrer</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.5}
+                          value={defaultCommission}
+                          onChange={(e) => setDefaultCommission(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                          className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-brand-purple text-sm"
+                        />
+                        <span className="text-gray-400 text-sm">%</span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-600">
+                        New affiliates start at {defaultCommission}% commission.
+                      </p>
+                    </div>
+                  </div>
+                  {platformFee + defaultCommission <= 100 && (
+                    <div className="mt-4 p-3 bg-brand-purple/10 border border-brand-purple/20 rounded-xl text-xs text-gray-400">
+                      💡 With current rates, on a $10 sale: platform earns ${(10 * platformFee / 100).toFixed(2)}, affiliate earns ${(10 * defaultCommission / 100).toFixed(2)}, seller receives ${(10 * (100 - platformFee - defaultCommission) / 100).toFixed(2)}.
+                    </div>
+                  )}
+                </div>
+
                 <div className="glass-card rounded-2xl p-6">
                   <h2 className="text-lg font-semibold text-white mb-4">Application Settings</h2>
                   <div className="space-y-4">

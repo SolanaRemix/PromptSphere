@@ -561,6 +561,17 @@ export async function getUserPayments(userId: string): Promise<Payment[]> {
   });
 }
 
+/**
+ * Updates a payment's status to `refunded`.
+ *
+ * ⚠️  PRODUCTION NOTE: In production, initiate the refund through the payment
+ * provider's API first and only update Firestore upon receiving a webhook
+ * confirmation. This client-side function is suitable for admin demos.
+ */
+export async function refundPayment(paymentId: string): Promise<void> {
+  await updateDoc(doc(db, 'payments', paymentId), { status: 'refunded' });
+}
+
 /** Checks if a user has already purchased a given prompt.
  *
  * Checks for both `completed` and `pending` status:

@@ -10,6 +10,18 @@ import { auth } from './firebase';
 export const ADMIN_EMAIL =
   process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? 'gxqstudio@gmail.com';
 
+/**
+ * A set of email addresses granted moderator privileges.
+ * Moderators can review and remove spam listings but cannot access financial data.
+ * Set NEXT_PUBLIC_MODERATOR_EMAILS as a comma-separated list to override.
+ */
+export const MODERATOR_EMAILS: Set<string> = new Set(
+  (process.env.NEXT_PUBLIC_MODERATOR_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean)
+);
+
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   const result = await signInWithPopup(auth, provider);
