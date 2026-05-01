@@ -17,7 +17,7 @@ import UserTable from '@/components/UserTable';
 import { User, Role, ActivityLog, Payment, Affiliate } from '@/types';
 import Link from 'next/link';
 import { signOut, ADMIN_EMAIL } from '@/lib/auth';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime, DEFAULT_COMMISSION_RATE } from '@/lib/utils';
 
 export default function AdminPage() {
   const { user, loading, isAdmin } = useAuth();
@@ -33,7 +33,11 @@ export default function AdminPage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [platformFee, setPlatformFee] = useState(10);
-  const [defaultCommission, setDefaultCommission] = useState(10);
+  // Initialise from DEFAULT_COMMISSION_RATE to stay in sync with what the
+  // affiliate creation flow actually uses as the default.
+  const [defaultCommission, setDefaultCommission] = useState(
+    Math.round(DEFAULT_COMMISSION_RATE * 100)
+  );
 
   useEffect(() => {
     if (!loading) {
@@ -75,10 +79,11 @@ export default function AdminPage() {
   };
 
   const handleRefund = async (paymentId: string) => {
+    if (!user) return;
     if (!confirm('Mark this payment as refunded?')) return;
     setRefundingId(paymentId);
     try {
-      await refundPayment(paymentId);
+      await refundPayment(paymentId, user.uid);
       setPayments((prev) =>
         prev.map((p) => (p.id === paymentId ? { ...p, status: 'refunded' } : p))
       );

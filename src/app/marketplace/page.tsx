@@ -122,7 +122,7 @@ function MarketplaceInner() {
             <div className="flex items-center gap-2 mb-4">
               <span className="text-xl">🔥</span>
               <h2 className="text-lg font-semibold text-white">Trending Now</h2>
-              <span className="text-xs text-gray-500 ml-1">— AI-powered discovery</span>
+              <span className="text-xs text-gray-500 ml-1">— top prompts by popularity score</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {trendingListings.map((listing) => (

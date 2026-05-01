@@ -471,7 +471,7 @@ export default function PromptEditor({
                   {visibility === 'public'
                     ? 'Visible to everyone on PromptSphere.'
                     : visibility === 'unlisted'
-                    ? 'Only accessible via direct link — not listed in search.'
+                    ? 'Direct-link access only — not indexed in public prompt feeds.'
                     : 'Only you can see this prompt.'}
                 </p>
               </div>

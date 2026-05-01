@@ -15,7 +15,7 @@ export interface User {
    * Spec-aligned subscription tier field (free | premium | pro).
    * `premium` corresponds to `tier: 'starter'` in the primary field.
    * Optional for backward compatibility with records written before this field
-   * was added.  New records should include both `tier` and `subscriptionTier`.
+   * was added.
    */
   subscriptionTier?: 'free' | 'premium' | 'pro';
   affiliateId?: string;
@@ -30,7 +30,7 @@ export interface Prompt {
   tags: string[];
   /** Detected {{parameter}} placeholders within the prompt content */
   parameters: string[];
-  /** Whether this prompt is publicly visible or private */
+  /** Whether this prompt is publicly visible, accessible via direct link only (unlisted), or private */
   visibility: 'public' | 'private' | 'unlisted';
   /** Price in USD cents; 0 means free */
   price: number;

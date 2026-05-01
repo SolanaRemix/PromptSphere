@@ -27,14 +27,20 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "moderator");
     }
 
-    // Helper: true when the authenticated user can read the given prompt
-    // (either owner, or the prompt is publicly visible or unlisted).
+    // Helper: true when the caller may read the given prompt.
+    // - Public and unlisted prompts can be read by anyone (including
+    //   unauthenticated visitors), consistent with the "share via direct link"
+    //   promise for unlisted content.
+    // - Private prompts are readable only by their owner.
     // Returns false if the prompt document doesn't exist.
     function canReadPrompt(promptId) {
       let p = get(/databases/$(database)/documents/prompts/$(promptId)).data;
-      return request.auth != null
-        && p != null
-        && (p.userId == request.auth.uid || p.visibility == 'public' || p.visibility == 'unlisted');
+      return p != null
+        && (
+          p.visibility == 'public'
+          || p.visibility == 'unlisted'
+          || (request.auth != null && p.userId == request.auth.uid)
+        );
     }
 
     // Users collection

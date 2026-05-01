@@ -49,15 +49,11 @@ const SECTIONS = [
       },
       {
         heading: 'Trending Feed',
-        body: 'When you apply a category filter or change the sort order from the default, a Trending Now section appears at the top showing the 4 most-viewed prompts across all categories. The default "All / Trending" view already surfaces popular prompts, so the extra section is only shown when browsing a filtered subset.',
+        body: 'When you apply a category filter or change the sort order from the default, a Trending Now section appears at the top showing the 4 prompts with the highest popularity score across all categories. Popularity score is weighted by views and purchases. The default "All / Trending" view already surfaces these prompts so the section only appears when browsing a filtered subset.',
       },
       {
         heading: 'Ratings & Reviews',
         body: 'After purchasing or downloading a free prompt, you can leave a 1–5 star rating. Each user can rate a prompt once and update their rating at any time. The listing\'s average score is updated automatically using an incremental Firestore transaction so no full-collection scan is needed.',
-      },
-      {
-        heading: 'Trending Feed',
-        body: 'The trending algorithm boosts listings based on view counts, purchases, and star ratings. The AI suggestion engine also surfaces relevant keywords from trending patterns to help your prompt rank higher.',
       },
     ],
   },
@@ -149,7 +145,7 @@ const SECTIONS = [
       },
       {
         heading: 'Spam Control & Moderation',
-        body: 'Flag or remove listings reported as spam from the Spam Control tab. Moderator-role users can also remove listings. Banned users are prevented from publishing new listings.',
+        body: 'Flag or remove listings reported as spam from the Spam Control tab. Accounts with the "moderator" role have Firestore-level permission to delete marketplace listings. Full moderator UI tooling (dedicated feed, ban actions) is planned for a future release. Banned users are prevented from publishing new listings.',
       },
       {
         heading: 'Fee Configuration',
@@ -176,7 +172,7 @@ const SECTIONS = [
       },
       {
         heading: 'prompts',
-        body: 'Fields: promptId, userId, title, content, category, price, visibility (public|private|unlisted), tags, parameters, version, collaborators, rating, ratingCount, salesCount, description, createdAt, updatedAt. Unlisted prompts are accessible only via direct link and do not appear in search results. Sub-collection: versions.',
+        body: 'Fields: promptId, userId, title, content, category, price, visibility (public|private|unlisted), tags, parameters, version, collaborators, rating, ratingCount, salesCount, description, createdAt, updatedAt. Unlisted prompts are excluded from public prompt feeds (getPublicPrompts) but are still accessible via direct link and can be published to the Marketplace. Sub-collection: versions.',
       },
       {
         heading: 'marketplace',
@@ -184,7 +180,7 @@ const SECTIONS = [
       },
       {
         heading: 'payments',
-        body: 'Fields: paymentId, userId, promptId, amount, currency, method, status, affiliateId, createdAt.',
+        body: 'Fields: paymentId, userId, promptId, amount, currency, method, status, affiliateId, createdAt. Refunded payments additionally include: refundedAt (timestamp), refundedBy (admin uid).',
       },
       {
         heading: 'affiliates',
