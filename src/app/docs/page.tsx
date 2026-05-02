@@ -30,7 +30,7 @@ const SECTIONS = [
       },
       {
         heading: 'Create Your First Prompt',
-        body: 'Click "+ New Prompt", fill in the title, content, and tags. Use {{variable}} syntax to mark dynamic parameters. Set the visibility to Public and add a price (or leave at $0 for free) before saving.',
+        body: 'Click "+ New Prompt", fill in the title, content, and tags. Use {{variable}} syntax to mark dynamic parameters. Set visibility to Public (listed in search), Unlisted (accessible via direct link only), or Private (only you). Add a price or leave at $0 for free, then save.',
       },
     ],
   },
@@ -48,12 +48,12 @@ const SECTIONS = [
         body: 'The /marketplace page lets you filter by category (Writing, Coding, Business, etc.), sort by Trending / Top Rated / Price / Newest, and search by keyword. Free and paid filters are also available.',
       },
       {
-        heading: 'Ratings & Reviews',
-        body: 'After purchasing or downloading a free prompt, you can leave a 1–5 star rating. Each user can rate a prompt once and update their rating at any time. The listing\'s average score is updated automatically using an incremental Firestore transaction so no full-collection scan is needed.',
+        heading: 'Trending Feed',
+        body: 'When you apply a category filter or change the sort order from the default, a Trending Now section appears at the top showing the 4 prompts with the highest popularity score across all categories. Popularity score increments on each listing view (+1). Confirmed purchases add a larger boost (+5), but this only applies when a payment is marked completed by a verified backend — in the demo, payments are recorded as pending so only views currently affect the score. The default "All / Trending" view already surfaces these prompts so the section only appears when browsing a filtered subset.',
       },
       {
-        heading: 'Trending Feed',
-        body: 'The trending algorithm boosts listings based on view counts, purchases, and star ratings. The AI suggestion engine also surfaces relevant keywords from trending patterns to help your prompt rank higher.',
+        heading: 'Ratings & Reviews',
+        body: 'After purchasing or downloading a free prompt, you can leave a 1–5 star rating. Each user can rate a prompt once and update their rating at any time. The listing\'s average score is updated automatically using an incremental Firestore transaction so no full-collection scan is needed.',
       },
     ],
   },
@@ -137,7 +137,7 @@ const SECTIONS = [
       },
       {
         heading: 'Payment Management',
-        body: 'The Payments tab shows all transactions with amount, method, status, and timestamp. Use this to verify payments, process refunds, and audit revenue.',
+        body: 'The Payments tab shows all transactions with amount, method, status, and timestamp. Use the Refund button on any completed or pending payment to mark it as refunded. In production, trigger the provider refund through their API first.',
       },
       {
         heading: 'Affiliate Management',
@@ -145,7 +145,11 @@ const SECTIONS = [
       },
       {
         heading: 'Spam Control & Moderation',
-        body: 'Flag or remove listings reported as spam from the Spam Control tab. Banned users are prevented from publishing new listings.',
+        body: 'Flag or remove listings reported as spam from the Spam Control tab. Accounts with the "moderator" role have Firestore-level permission to delete marketplace listings. Full moderator UI tooling (dedicated feed, ban actions) is planned for a future release. Banned users are prevented from publishing new listings.',
+      },
+      {
+        heading: 'Fee Configuration',
+        body: 'Set the platform fee percentage and default affiliate commission rate from the Settings tab. These values determine how revenue is split between the platform, affiliate, and seller on each transaction.',
       },
       {
         heading: 'API Keys',
@@ -164,11 +168,11 @@ const SECTIONS = [
       },
       {
         heading: 'users',
-        body: 'Fields: uid, email, displayName, photoURL, role (user|admin), tier (free|starter|pro), subscriptionTier, affiliateId, createdAt.',
+        body: 'Fields: uid, email, displayName, photoURL, role (user|admin|moderator), tier (free|starter|pro), subscriptionTier (free|premium|pro), affiliateId, createdAt.',
       },
       {
         heading: 'prompts',
-        body: 'Fields: promptId, userId, title, content, category, price, visibility, tags, parameters, version, collaborators, rating, ratingCount, salesCount, description, createdAt, updatedAt. Sub-collection: versions.',
+        body: 'Fields: promptId, userId, title, content, category, price, visibility (public|private|unlisted), tags, parameters, version, collaborators, rating, ratingCount, salesCount, description, createdAt, updatedAt. Unlisted prompts are excluded from public prompt feeds (getPublicPrompts) but are still accessible via direct link and can be published to the Marketplace. Sub-collection: versions.',
       },
       {
         heading: 'marketplace',
@@ -176,7 +180,7 @@ const SECTIONS = [
       },
       {
         heading: 'payments',
-        body: 'Fields: paymentId, userId, promptId, amount, currency, method, status, affiliateId, createdAt.',
+        body: 'Fields: paymentId, userId, promptId, amount, currency, method, status, affiliateId, createdAt. Refunded payments additionally include: refundedAt (timestamp), refundedBy (admin uid).',
       },
       {
         heading: 'affiliates',

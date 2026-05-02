@@ -3,9 +3,21 @@ export interface User {
   email: string;
   displayName: string;
   photoURL: string;
-  role: 'user' | 'admin';
-  /** Subscription tier; stored as `tier` in Firestore for backward-compatibility. */
+  role: 'user' | 'admin' | 'moderator';
+  /**
+   * Primary subscription tier stored in Firestore.
+   * Values intentionally differ from `subscriptionTier` — `starter` maps to
+   * the intermediate tier.  This is the authoritative field used by application
+   * logic; `subscriptionTier` is the spec-aligned alias for external compatibility.
+   */
   tier: 'free' | 'starter' | 'pro';
+  /**
+   * Spec-aligned subscription tier field (free | premium | pro).
+   * `premium` corresponds to `tier: 'starter'` in the primary field.
+   * Optional for backward compatibility with records written before this field
+   * was added.
+   */
+  subscriptionTier?: 'free' | 'premium' | 'pro';
   affiliateId?: string;
   createdAt: Date;
 }
@@ -18,8 +30,8 @@ export interface Prompt {
   tags: string[];
   /** Detected {{parameter}} placeholders within the prompt content */
   parameters: string[];
-  /** Whether this prompt is publicly visible or private */
-  visibility: 'public' | 'private';
+  /** Whether this prompt is publicly visible, accessible via direct link only (unlisted), or private */
+  visibility: 'public' | 'private' | 'unlisted';
   /** Price in USD cents; 0 means free */
   price: number;
   /** Monotonically increasing edit counter */

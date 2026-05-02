@@ -18,37 +18,69 @@ service cloud.firestore {
         && request.auth.token.email == "gxqstudio@gmail.com";
     }
 
-    // Helper: true when the authenticated user can read the given prompt
-    // (either owner, or the prompt is publicly visible).
+    // Helper: returns true when the caller has moderator privileges.
+    // Moderators can manage spam content but cannot access financial data.
+    // In production, use a Firebase custom claim (e.g. `moderator: true`).
+    function isModerator() {
+      return isAdmin()
+        || (request.auth != null
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "moderator");
+    }
+
+    // Helper: true when the caller may read the given prompt.
+    // - Public and unlisted prompts can be read by anyone (including
+    //   unauthenticated visitors), consistent with the "share via direct link"
+    //   promise for unlisted content.
+    // - Private prompts are readable only by their owner.
     // Returns false if the prompt document doesn't exist.
     function canReadPrompt(promptId) {
       let p = get(/databases/$(database)/documents/prompts/$(promptId)).data;
-      return request.auth != null
-        && p != null
-        && (p.userId == request.auth.uid || p.visibility == 'public');
+      return p != null
+        && (
+          p.visibility == 'public'
+          || p.visibility == 'unlisted'
+          || (request.auth != null && p.userId == request.auth.uid)
+        );
     }
 
     // Users collection
     match /users/{uid} {
-      // Any authenticated user may read and write their own document
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-      // Admin may list all users
+      // Any authenticated user may read their own document; admin may read any.
+      allow read: if request.auth != null && request.auth.uid == uid;
       allow list: if isAdmin();
+      // Users may create their own profile document.
+      allow create: if request.auth != null && request.auth.uid == uid;
+      // Users may update their own profile, but only admin may change the `role`
+      // field — this prevents a user from self-escalating to 'moderator'/'admin'.
+      // Admin bypasses the role-lock and may update any field.
+      allow update: if isAdmin()
+                     || (request.auth != null
+                         && request.auth.uid == uid
+                         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      // Users may delete their own document; admin may delete any.
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // Prompts collection
     match /prompts/{promptId} {
-      // Any authenticated user may read or create prompts
-      allow read, create: if request.auth != null;
+      // Public and unlisted prompts are readable without authentication (consistent
+      // with canReadPrompt and the "share via direct link" contract). Private
+      // prompts are readable only by the owner.
+      allow read: if resource.data.visibility == 'public'
+                   || resource.data.visibility == 'unlisted'
+                   || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null;
       // Only the owner may update or delete their own prompt
       allow update, delete: if request.auth != null
         && resource.data.userId == request.auth.uid;
 
       // Version history sub-collection
       match /versions/{versionId} {
-        // Reads are restricted to users who can access the parent prompt
-        // (owner, or prompt is public).
-        allow read: if canReadPrompt(promptId);
+        // Version history (full edit history) is restricted to authenticated
+        // users who can access the prompt — anonymous visitors should not be
+        // able to enumerate or read a prompt's entire edit history even if the
+        // prompt itself is public/unlisted.
+        allow read: if request.auth != null && canReadPrompt(promptId);
         // Only the owner of the parent prompt may append version entries, and
         // the version document must reference the correct parent promptId.
         allow create: if request.auth != null
@@ -73,12 +105,13 @@ service cloud.firestore {
     }
 
     // Real-time collaboration presence sessions.
-    // Presence reads are scoped to users who can access the underlying prompt,
-    // so private prompt collaborators are not visible to arbitrary signed-in users.
+    // Presence reads are scoped to authenticated users who can access the
+    // underlying prompt — collaborator identities should not be exposed to
+    // anonymous visitors even when a prompt is public or unlisted.
     match /collaborationSessions/{promptId} {
       match /presence/{presenceUserId} {
-        // Only users who can read the prompt may see who is collaborating on it.
-        allow read: if canReadPrompt(promptId);
+        // Require authentication: collaborator names/avatars are private metadata.
+        allow read: if request.auth != null && canReadPrompt(promptId);
         // Users may only write their own presence record, and only for prompts
         // they are allowed to access (prevents spamming arbitrary promptIds).
         allow write: if request.auth != null
@@ -109,7 +142,8 @@ service cloud.firestore {
           || isAdmin()
         );
 
-      allow delete: if isAdmin();
+      // Admins and moderators may remove spam listings.
+      allow delete: if isAdmin() || isModerator();
 
       // Ratings sub-collection – any authenticated user may read/write their
       // own rating document.  Validated to contain only permitted fields and a

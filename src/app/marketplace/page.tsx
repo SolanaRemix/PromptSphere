@@ -37,6 +37,7 @@ function MarketplaceInner() {
   const { user } = useAuth();
 
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
+  const [trendingListings, setTrendingListings] = useState<MarketplaceListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<string>(searchParams.get('category') ?? 'all');
   const [sortBy, setSortBy] = useState<'popularityScore' | 'price' | 'rating' | 'createdAt'>('popularityScore');
@@ -55,8 +56,18 @@ function MarketplaceInner() {
   const loadListings = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getMarketplaceListings({ category, sortBy });
+      const isDefaultView = category === 'all' && sortBy === 'popularityScore';
+      const [data, trending] = await Promise.all([
+        getMarketplaceListings({ category, sortBy }),
+        // Load a separate trending feed only when the user has applied a filter
+        // or sort — the default view already shows popular prompts so a
+        // duplicate trending row would be redundant.
+        !isDefaultView
+          ? getMarketplaceListings({ sortBy: 'popularityScore', maxResults: 4 })
+          : Promise.resolve([] as MarketplaceListing[]),
+      ]);
       setListings(data);
+      setTrendingListings(trending);
     } catch (err) {
       console.error('Failed to load marketplace listings:', err);
     } finally {
@@ -105,6 +116,26 @@ function MarketplaceInner() {
       </section>
 
       <div className="max-w-7xl mx-auto px-4 pb-16">
+        {/* Trending Feed — shown when not filtered to default popularity view */}
+        {!loading && trendingListings.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">🔥</span>
+              <h2 className="text-lg font-semibold text-white">Trending Now</h2>
+              <span className="text-xs text-gray-500 ml-1">— top prompts by popularity score</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {trendingListings.map((listing) => (
+                <MarketplaceCard
+                  key={listing.id}
+                  listing={listing}
+                  affiliateId={affiliateId}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Filters row */}
         <div className="glass-card rounded-2xl p-4 mb-8 flex flex-wrap items-center gap-4">
           {/* Search */}

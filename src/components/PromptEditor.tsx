@@ -62,7 +62,7 @@ export default function PromptEditor({
   const [title, setTitle] = useState(prompt?.title ?? '');
   const [content, setContent] = useState(prompt?.content ?? '');
   const [tags, setTags] = useState(prompt?.tags.join(', ') ?? '');
-  const [visibility, setVisibility] = useState<'public' | 'private'>(prompt?.visibility ?? 'private');
+  const [visibility, setVisibility] = useState<'public' | 'private' | 'unlisted'>(prompt?.visibility ?? 'private');
   const [price, setPrice] = useState(prompt?.price ?? 0);
   const [version, setVersion] = useState(prompt?.version ?? 1);
   const [saving, setSaving] = useState(false);
@@ -449,7 +449,7 @@ export default function PromptEditor({
               <div>
                 <label className="block text-sm text-gray-400 mb-2">Visibility</label>
                 <div className="flex gap-3">
-                  {(['public', 'private'] as const).map((v) => (
+                  {(['public', 'unlisted', 'private'] as const).map((v) => (
                     <button
                       key={v}
                       type="button"
@@ -463,13 +463,15 @@ export default function PromptEditor({
                           : 'bg-dark-700 border-dark-600 text-gray-400 hover:text-white'
                       }`}
                     >
-                      {v === 'public' ? '🌐 Public' : '🔒 Private'}
+                      {v === 'public' ? '🌐 Public' : v === 'unlisted' ? '🔗 Unlisted' : '🔒 Private'}
                     </button>
                   ))}
                 </div>
                 <p className="mt-1 text-xs text-gray-600">
                   {visibility === 'public'
                     ? 'Visible to everyone on PromptSphere.'
+                    : visibility === 'unlisted'
+                    ? 'Direct-link access only — not indexed in public prompt feeds.'
                     : 'Only you can see this prompt.'}
                 </p>
               </div>
