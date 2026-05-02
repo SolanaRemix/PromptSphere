@@ -5,6 +5,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { ADMIN_EMAIL } from '@/lib/auth';
 import { getUser } from '@/lib/firestore';
+import type { User } from '@/types';
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -27,25 +28,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Role is fetched from the Firestore `users/{uid}` document so the
    * client-side `isModerator` flag stays in sync with Firestore security
    * rules (which check `users/{uid}.role == "moderator"`).
+   * Typed as `User['role']` (closed set) rather than `string` for type safety.
    */
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<User['role'] | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+    /**
+     * Tracks the uid of the most-recent auth-state change.  If auth flips
+     * (e.g. sign-out then sign-in) while a getUser fetch is in-flight, the
+     * stale response is discarded by comparing against `latestUid`.
+     */
+    let latestUid: string | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const uid = firebaseUser?.uid ?? null;
+      latestUid = uid;
+
+      if (!isMounted) return;
       setUser(firebaseUser);
-      if (firebaseUser) {
-        try {
-          const profile = await getUser(firebaseUser.uid);
-          setUserRole(profile?.role ?? 'user');
-        } catch {
-          setUserRole('user');
-        }
-      } else {
+
+      if (!firebaseUser) {
         setUserRole(null);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      try {
+        const profile = await getUser(firebaseUser.uid);
+        // Discard results if the component unmounted or auth changed again.
+        if (isMounted && latestUid === uid) {
+          // profile.role is already validated as User['role'] by the type
+          // returned from getUser; fall back to 'user' for missing profiles.
+          setUserRole(profile?.role ?? 'user');
+          setLoading(false);
+        }
+      } catch {
+        if (isMounted && latestUid === uid) {
+          setUserRole('user');
+          setLoading(false);
+        }
+      }
     });
-    return unsubscribe;
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const isAdmin = user?.email === ADMIN_EMAIL;

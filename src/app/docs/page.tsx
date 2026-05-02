@@ -49,7 +49,7 @@ const SECTIONS = [
       },
       {
         heading: 'Trending Feed',
-        body: 'When you apply a category filter or change the sort order from the default, a Trending Now section appears at the top showing the 4 prompts with the highest popularity score across all categories. Popularity score is weighted by views and purchases. The default "All / Trending" view already surfaces these prompts so the section only appears when browsing a filtered subset.',
+        body: 'When you apply a category filter or change the sort order from the default, a Trending Now section appears at the top showing the 4 prompts with the highest popularity score across all categories. Popularity score increments on each listing view (+1). Confirmed purchases add a larger boost (+5), but this only applies when a payment is marked completed by a verified backend — in the demo, payments are recorded as pending so only views currently affect the score. The default "All / Trending" view already surfaces these prompts so the section only appears when browsing a filtered subset.',
       },
       {
         heading: 'Ratings & Reviews',

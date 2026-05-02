@@ -45,25 +45,42 @@ service cloud.firestore {
 
     // Users collection
     match /users/{uid} {
-      // Any authenticated user may read and write their own document
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-      // Admin may list all users
+      // Any authenticated user may read their own document; admin may read any.
+      allow read: if request.auth != null && request.auth.uid == uid;
       allow list: if isAdmin();
+      // Users may create their own profile document.
+      allow create: if request.auth != null && request.auth.uid == uid;
+      // Users may update their own profile, but only admin may change the `role`
+      // field — this prevents a user from self-escalating to 'moderator'/'admin'.
+      // Admin bypasses the role-lock and may update any field.
+      allow update: if isAdmin()
+                     || (request.auth != null
+                         && request.auth.uid == uid
+                         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      // Users may delete their own document; admin may delete any.
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // Prompts collection
     match /prompts/{promptId} {
-      // Any authenticated user may read or create prompts
-      allow read, create: if request.auth != null;
+      // Public and unlisted prompts are readable without authentication (consistent
+      // with canReadPrompt and the "share via direct link" contract). Private
+      // prompts are readable only by the owner.
+      allow read: if resource.data.visibility == 'public'
+                   || resource.data.visibility == 'unlisted'
+                   || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null;
       // Only the owner may update or delete their own prompt
       allow update, delete: if request.auth != null
         && resource.data.userId == request.auth.uid;
 
       // Version history sub-collection
       match /versions/{versionId} {
-        // Reads are restricted to users who can access the parent prompt
-        // (owner, or prompt is public).
-        allow read: if canReadPrompt(promptId);
+        // Version history (full edit history) is restricted to authenticated
+        // users who can access the prompt — anonymous visitors should not be
+        // able to enumerate or read a prompt's entire edit history even if the
+        // prompt itself is public/unlisted.
+        allow read: if request.auth != null && canReadPrompt(promptId);
         // Only the owner of the parent prompt may append version entries, and
         // the version document must reference the correct parent promptId.
         allow create: if request.auth != null
@@ -88,12 +105,13 @@ service cloud.firestore {
     }
 
     // Real-time collaboration presence sessions.
-    // Presence reads are scoped to users who can access the underlying prompt,
-    // so private prompt collaborators are not visible to arbitrary signed-in users.
+    // Presence reads are scoped to authenticated users who can access the
+    // underlying prompt — collaborator identities should not be exposed to
+    // anonymous visitors even when a prompt is public or unlisted.
     match /collaborationSessions/{promptId} {
       match /presence/{presenceUserId} {
-        // Only users who can read the prompt may see who is collaborating on it.
-        allow read: if canReadPrompt(promptId);
+        // Require authentication: collaborator names/avatars are private metadata.
+        allow read: if request.auth != null && canReadPrompt(promptId);
         // Users may only write their own presence record, and only for prompts
         // they are allowed to access (prevents spamming arbitrary promptIds).
         allow write: if request.auth != null
